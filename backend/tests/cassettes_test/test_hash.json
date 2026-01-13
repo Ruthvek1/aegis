@@ -1,0 +1,12 @@
+{
+  "prompt": "Tell me a joke",
+  "response": {
+    "content": "mocked output",
+    "response_metadata": {
+      "usage": {
+        "input_tokens": 100,
+        "output_tokens": 50
+      }
+    }
+  }
+}

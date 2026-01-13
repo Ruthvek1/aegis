@@ -1,0 +1,3 @@
+{
+    "task": "Fix the KeyError in get_value in dict_utils.py. It should return None if the key is missing."
+}

@@ -1,0 +1,1 @@
+{"content": "{\"plan\": [{\"step\": \"1\", \"action\": \"Fix backend/evals/dataset/issue_5/math_utils.py\"}]}", "response_metadata": {"usage": {"input_tokens": 100, "output_tokens": 20}}}

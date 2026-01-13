@@ -1,0 +1,3 @@
+{
+    "task": "Fix the logic error in multiply_list in math_utils.py. It should return the product of the numbers, not the sum. Also initialize result to 1."
+}

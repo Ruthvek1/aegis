@@ -1,0 +1,40 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "docker>=7.1.0",
+    "fastapi>=0.139.0",
+    "httpx>=0.28.1",
+    "langchain-anthropic>=1.4.8",
+    "langchain-core>=1.4.8",
+    "langgraph>=1.2.7",
+    "langgraph-checkpoint-postgres>=3.1.0",
+    "mcp>=1.28.1",
+    "opentelemetry-api>=1.43.0",
+    "opentelemetry-sdk>=1.43.0",
+    "pgvector>=0.4.2",
+    "psycopg[binary]>=3.3.4",
+    "pydantic>=2.13.4",
+    "sse-starlette>=3.4.5",
+    "uvicorn>=0.50.1",
+]
+
+[dependency-groups]
+dev = [
+    "black>=26.5.1",
+    "mypy>=2.1.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.15.20",
+    "types-docker>=7.1.0.20260518",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-v --strict-markers"
+
+[tool.mypy]
+exclude = ["evals/dataset/"]

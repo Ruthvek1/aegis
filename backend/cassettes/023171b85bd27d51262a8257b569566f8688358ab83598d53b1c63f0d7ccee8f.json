@@ -1,0 +1,1 @@
+{"content": "{\"plan\": [{\"step\": \"1\", \"action\": \"Fix backend/seed_repo/math_lib.py\"}]}", "response_metadata": {"usage": {"input_tokens": 100, "output_tokens": 20}}}

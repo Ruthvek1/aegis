@@ -1,0 +1,3 @@
+{
+    "task": "Fix the division by zero bug in math_lib.py. It should raise ValueError('Cannot divide by zero') instead of ZeroDivisionError."
+}

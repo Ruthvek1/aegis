@@ -1,0 +1,45 @@
+name: Evals
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: aegis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: uv sync
+
+      - name: Run Evals (pass@1, Component, Trajectory)
+        working-directory: ./backend
+        run: uv run python evals/run_eval.py
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/aegis
+          LIVE_API_CASSETTE: replay
+          PYTHONPATH: "."

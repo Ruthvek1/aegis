@@ -1,0 +1,3 @@
+{
+    "task": "Fix the IndexError in get_first_char in string_utils.py. It should return None if the string is empty."
+}

@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: aegis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: uv sync
+
+      - name: Lint with ruff
+        working-directory: ./backend
+        run: uv run ruff check .
+
+      - name: Format check with ruff
+        working-directory: ./backend
+        run: uv run ruff format --check .
+
+      - name: Typecheck with mypy
+        working-directory: ./backend
+        run: uv run mypy .
+
+      - name: Test with pytest
+        working-directory: ./backend
+        run: uv run pytest -v
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/aegis
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: "npm"
+          cache-dependency-path: "./frontend/package-lock.json"
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Typecheck
+        working-directory: ./frontend
+        run: npx tsc --noEmit
