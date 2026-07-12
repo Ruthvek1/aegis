@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "http://YOUR_AZURE_IP:8000/$1"
+      "destination": "https://aegis-backend-fz71.onrender.com/$1"
     },
     {
       "source": "/(.*)",
