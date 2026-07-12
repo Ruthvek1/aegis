@@ -5,6 +5,7 @@ import { GraphPane } from './components/GraphPane';
 import { TranscriptPane } from './components/TranscriptPane';
 import { Scrubber } from './components/Scrubber';
 import { ApprovalModal } from './components/ApprovalModal';
+import { AlertCircle } from 'lucide-react';
 
 export default function App() {
   const { events, activeNode, costUsd, isRunning, isPaused, startRun, cancelRun, resumeRun, startTime } = useAgentStore();
@@ -41,6 +42,12 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+      <div className="bg-yellow-500/10 border-b border-yellow-500/20 text-yellow-200/90 text-sm py-2 px-4 flex items-center justify-center gap-2 shadow-sm z-20 shrink-0">
+        <AlertCircle size={16} className="text-yellow-500 shrink-0" />
+        <p>
+          <strong>Notice:</strong> Demo Mode runs on a shared free-tier API, which may occasionally error due to rate limits. For the full, uninterrupted experience, please use <strong>BYO Key Mode</strong> with your own NVIDIA API key.
+        </p>
+      </div>
       <TopBar 
         costUsd={displayCost} 
         isRunning={isRunning} 

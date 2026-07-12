@@ -91,10 +91,14 @@ if os.getenv("NVIDIA_API_KEY_2"):
 _key_iterator = itertools.cycle(_api_keys) if _api_keys else None
 
 # In production we'd use these, but tests will mock get_llm
-def get_llm(temperature: float = 0.0, model_tier: str = "cheap") -> Any:
+def get_llm(temperature: float = 0.0, model_tier: str = "cheap", config: dict | None = None) -> Any:
     # We detected DeepSeek and GLM throw 403 (unauthorized/opt-in required) on these keys
     # so we fallback to Llama 3.1 which is verified to work on the free tier!
-    model_name = "meta/llama-3.1-8b-instruct" if model_tier == "cheap" else "meta/llama-3.1-70b-instruct"
+    power_mode = config.get("configurable", {}).get("power_mode", "low") if config else "low"
+    if power_mode == "high":
+        model_name = "meta/llama-3.1-70b-instruct"
+    else:
+        model_name = "meta/llama-3.1-8b-instruct" if model_tier == "cheap" else "meta/llama-3.1-70b-instruct"
 
     from aegis.api_key import current_api_key
     byo_key = current_api_key.get()
@@ -120,9 +124,9 @@ def get_llm(temperature: float = 0.0, model_tier: str = "cheap") -> Any:
 
 
 @instrument_node
-async def planner_node(state: AgentState) -> dict:
+async def planner_node(state: AgentState, config: dict | None = None) -> dict:
     # Try with cheap model first
-    llm_cheap = get_llm(temperature=0.0, model_tier="cheap")
+    llm_cheap = get_llm(temperature=0.0, model_tier="cheap", config=config)
     structured_llm_cheap = llm_cheap.with_structured_output(PlanOutput)
 
     # Retrieve memories
@@ -148,7 +152,7 @@ async def planner_node(state: AgentState) -> dict:
         isinstance(res, dict) and "plan" in res
     ):
         # Escalate to frontier
-        llm_frontier = get_llm(temperature=0.0, model_tier="frontier")
+        llm_frontier = get_llm(temperature=0.0, model_tier="frontier", config=config)
         structured_llm_frontier = llm_frontier.with_structured_output(PlanOutput)
         res = await structured_llm_frontier.ainvoke(prompt)
 
@@ -160,8 +164,8 @@ async def planner_node(state: AgentState) -> dict:
 
 
 @instrument_node
-async def coder_node(state: AgentState) -> dict:
-    llm = get_llm(temperature=0.7, model_tier="cheap")
+async def coder_node(state: AgentState, config: dict | None = None) -> dict:
+    llm = get_llm(temperature=0.7, model_tier="cheap", config=config)
     # The coder is expected to output a JSON block with command to run, or we parse its output.
     # For the mock integration test, we will just simulate reading the LLM's intent and running a command.
     prompt = f"Execute plan: {state.get('plan')}"
@@ -233,8 +237,8 @@ async def coder_node(state: AgentState) -> dict:
 
 
 @instrument_node
-async def critic_node(state: AgentState) -> dict:
-    llm = get_llm(temperature=0.0, model_tier="frontier")
+async def critic_node(state: AgentState, config: dict | None = None) -> dict:
+    llm = get_llm(temperature=0.0, model_tier="frontier", config=config)
     structured_llm = llm.with_structured_output(CriticDecision)
     scratchpad = state.get("scratchpad", {})
     output = scratchpad.get("coder_output", "")
@@ -347,8 +351,8 @@ async def synthesizer_node(state: AgentState) -> dict:
 
 
 @instrument_node
-async def chatter_node(state: AgentState) -> dict:
-    llm = get_llm(temperature=0.7, model_tier="cheap")
+async def chatter_node(state: AgentState, config: dict | None = None) -> dict:
+    llm = get_llm(temperature=0.7, model_tier="cheap", config=config)
     prompt = f"The user said: {state.get('task')}\nRespond conversationally in a helpful manner. Keep it brief. Do not write any code, just answer them or ask clarifying questions."
     res = await llm.ainvoke(prompt)
     
@@ -363,8 +367,8 @@ async def chatter_node(state: AgentState) -> dict:
 
 
 @instrument_node
-async def simple_coder_node(state: AgentState) -> dict:
-    llm = get_llm(temperature=0.7, model_tier="cheap")
+async def simple_coder_node(state: AgentState, config: dict | None = None) -> dict:
+    llm = get_llm(temperature=0.7, model_tier="cheap", config=config)
     prompt = f"The user requested a code snippet or simple technical explanation: {state.get('task')}\nProvide a clean, well-formatted response with the code and a brief explanation. Do not over-explain."
     res = await llm.ainvoke(prompt)
     

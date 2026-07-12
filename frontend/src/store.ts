@@ -14,7 +14,7 @@ interface AgentState {
   ctrl: AbortController | null;
   startTime: number | null;
 
-  startRun: (task: string, mode?: string, apiKey?: string, captchaToken?: string) => Promise<void>;
+  startRun: (task: string, mode?: string, apiKey?: string, captchaToken?: string, powerMode?: string) => Promise<void>;
   cancelRun: () => Promise<void>;
   resumeRun: (action: string) => Promise<void>;
 }
@@ -29,7 +29,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   ctrl: null,
   startTime: null,
 
-  startRun: async (task, mode = 'replay', apiKey, captchaToken) => {
+  startRun: async (task, mode = 'replay', apiKey, captchaToken, powerMode = 'low') => {
     set({
       events: [],
       costUsd: 0,
@@ -40,7 +40,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     });
 
     try {
-      const payload: any = { task, mode };
+      const payload: any = { task, mode, power_mode: powerMode };
       if (apiKey) payload.api_key = apiKey;
       if (captchaToken) payload.captcha_token = captchaToken;
 
@@ -52,15 +52,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        const errMsg = errData.detail || `Server Error ${res.status}`;
-        set((state) => ({
-          events: [...state.events, {
-            id: Math.random().toString(36).substring(7),
-            raw: { type: 'error', error: errMsg, agent: 'system' } as any,
-            timestamp: Date.now()
-          }]
-        }));
-        throw new Error(errMsg);
+        throw new Error(errData.detail || `Server Error ${res.status}`);
       }
 
       const data = await res.json();
@@ -93,11 +85,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
               set({ costUsd: ev.cost_usd });
             } else if (ev.type === 'done') {
               set({ isRunning: false, activeNode: 'done' });
+              get().ctrl?.abort();
             } else if (ev.type === 'error') {
               set({ isRunning: false });
               if (ev.error.includes("Interrupt")) {
                 set({ isPaused: true });
               }
+              get().ctrl?.abort();
             }
           } catch (e) {
             console.error('Failed to parse event', e);
@@ -105,34 +99,38 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         },
         onerror(err) {
           console.error('SSE Error', err);
-          set((state) => {
-            const lastEv = state.events[state.events.length - 1];
-            if (lastEv && lastEv.raw.type === 'done') {
-              return state; // Ignore benign disconnect after completion
-            }
-            return {
-              ...state,
-              events: [...state.events, {
-                id: Math.random().toString(36).substring(7),
-                raw: { type: 'error', error: String(err) || "SSE Connection Lost", agent: 'system' } as any,
-                timestamp: Date.now()
-              }],
-              isRunning: false
-            };
-          });
+          const state = get();
+          const lastEv = state.events[state.events.length - 1];
+          if (lastEv && lastEv.raw.type === 'done') {
+            throw new Error('SILENT_ABORT');
+          }
           throw err;
         }
       });
     } catch (e: any) {
+      if (e.name === 'AbortError') return; // User aborted
+      if (e.message === 'SILENT_ABORT') return; // Benign disconnect
+      
       console.error(e);
-      set((state) => ({
-        events: [...state.events, {
-          id: Math.random().toString(36).substring(7),
-          raw: { type: 'error', error: e.message || String(e), agent: 'system' } as any,
-          timestamp: Date.now()
-        }],
-        isRunning: false
-      }));
+      let errMsg = e.message || String(e);
+      if (errMsg.toLowerCase().includes('failed to fetch') || errMsg.toLowerCase().includes('network error')) {
+        errMsg = 'Cannot connect to backend. Is Uvicorn running on port 8000?';
+      }
+      
+      set((state) => {
+        const lastEv = state.events[state.events.length - 1];
+        if (lastEv && lastEv.raw.type === 'error' && lastEv.raw.error === errMsg) {
+          return { isRunning: false };
+        }
+        return {
+          events: [...state.events, {
+            id: Math.random().toString(36).substring(7),
+            raw: { type: 'error', error: errMsg, agent: 'system' } as any,
+            timestamp: Date.now()
+          }],
+          isRunning: false
+        };
+      });
     }
   },
 
@@ -179,8 +177,35 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           else if (ev.type === 'handoff') set({ activeNode: ev.next });
           else if (ev.type === 'usage') set({ costUsd: ev.cost_usd });
           else if (ev.type === 'done') { set({ isRunning: false, activeNode: 'done' }); }
-        } catch (e) {}
-      }
+        } catch (e) {
+          console.error('Failed to parse event', e);
+        }
+      },
+      onerror(err) {
+          console.error('SSE Error', err);
+          set((state) => {
+            const lastEv = state.events[state.events.length - 1];
+            if (lastEv && lastEv.raw.type === 'done') return state;
+            
+            let errMsg = err instanceof Error ? err.message : String(err);
+            if (errMsg.toLowerCase().includes('failed to fetch') || errMsg.toLowerCase().includes('network error')) {
+              errMsg = 'Connection to backend lost.';
+            }
+
+            if (lastEv && lastEv.raw.type === 'error' && lastEv.raw.error === errMsg) return state;
+
+            return {
+              ...state,
+              events: [...state.events, {
+                id: Math.random().toString(36).substring(7),
+                raw: { type: 'error', error: errMsg, agent: 'system' } as any,
+                timestamp: Date.now()
+              }],
+              isRunning: false
+            };
+          });
+          throw err;
+        }
     });
   }
 }));

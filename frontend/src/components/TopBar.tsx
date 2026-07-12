@@ -4,7 +4,7 @@ import { Activity, DollarSign, Clock, Play, Square, Key, ShieldCheck } from 'luc
 interface TopBarProps {
   costUsd: number;
   isRunning: boolean;
-  onStart: (task: string, mode: string, apiKey?: string, captchaToken?: string) => void;
+  onStart: (task: string, mode: string, apiKey?: string, captchaToken?: string, powerMode?: string) => void;
   onStop: () => void;
   startTime: number | null;
 }
@@ -14,6 +14,7 @@ export const TopBar: React.FC<TopBarProps> = ({ costUsd, isRunning, onStart, onS
   const [mode, setMode] = useState('demo');
   const [apiKey, setApiKey] = useState('');
   const [isHuman, setIsHuman] = useState(false);
+  const [powerMode, setPowerMode] = useState('low');
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -43,7 +44,7 @@ export const TopBar: React.FC<TopBarProps> = ({ costUsd, isRunning, onStart, onS
       }
       captchaToken = "valid_mock_token_12345";
     }
-    onStart(task, mode, mode === 'byo' ? apiKey : undefined, captchaToken);
+    onStart(task, mode, mode === 'byo' ? apiKey : undefined, captchaToken, powerMode);
   };
 
   return (
@@ -67,6 +68,19 @@ export const TopBar: React.FC<TopBarProps> = ({ costUsd, isRunning, onStart, onS
           <option value="byo">BYO Key Mode</option>
           <option value="replay">Replay Mode (Free)</option>
         </select>
+
+        <button
+          onClick={() => setPowerMode(p => p === 'low' ? 'high' : 'low')}
+          disabled={isRunning}
+          className={`px-3 py-2 border rounded-md text-sm font-medium transition-colors disabled:opacity-50 shadow-sm ${
+            powerMode === 'high' 
+              ? 'bg-orange-500/20 text-orange-400 border-orange-500/50 hover:bg-orange-500/30' 
+              : 'bg-input/50 text-foreground border-border hover:bg-input/70'
+          }`}
+          title="High power uses the 70B model, Low uses the 8B model"
+        >
+          {powerMode === 'high' ? '⚡ High Power' : '🔋 Low Power'}
+        </button>
 
         {isRunning ? (
           <button 

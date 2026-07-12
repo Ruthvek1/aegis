@@ -95,6 +95,7 @@ class StartRunRequest(BaseModel):
     captcha_token: Optional[str] = None
     budget: int = 10
     max_cost_usd: float = 0.5
+    power_mode: str = "low"
 
 
 class ResumeRunRequest(BaseModel):
@@ -123,6 +124,14 @@ async def start_run(request: Request, body: StartRunRequest):
         "api_key": body.api_key,
         "budget": body.budget,
         "max_cost_usd": body.max_cost_usd,
+        "config": {
+            "configurable": {
+                "thread_id": run_id,
+                "max_budget": body.budget,
+                "max_cost_usd": body.max_cost_usd,
+                "power_mode": body.power_mode
+            }
+        },
         "type": "start",
     }
     return {"run_id": run_id, "mode": mode}
@@ -303,7 +312,10 @@ async def stream_run(run_id: str, request: Request):
         raise HTTPException(status_code=400, detail="Run already started")
 
     graph = build_graph(checkpointer=_checkpointer, interrupt_before=["synthesizer"])
-    config = {"configurable": {"thread_id": run_id}}
+    if "config" in pending:
+        config = pending["config"]
+    else:
+        config = {"configurable": {"thread_id": run_id}}
 
     if pending["type"] == "start":
         input_data: Any = {
