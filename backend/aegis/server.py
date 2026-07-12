@@ -295,6 +295,8 @@ async def _run_graph_stream(run_id: str, graph, config: dict, input_data: Any, m
     except asyncio.CancelledError:
         yield f"data: {json.dumps({'type': 'error', 'error': 'Run cancelled due to client disconnect'})}\n\n"
         raise
+    except Exception as e:
+        yield f"data: {json.dumps({'type': 'error', 'error': f'Internal Error: {str(e)}'})}\n\n"
     finally:
         if run_id in _active_tasks:
             del _active_tasks[run_id]
