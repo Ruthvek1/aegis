@@ -16,7 +16,7 @@
   <br />
 
   <a href="https://aegis-inky-pi.vercel.app/">
-    <img src="https://img.shields.io/badge/🚀_Live_Demo-Access_AEGIS_Now-FF5722?style=for-the-badge&logo=vercel&logoColor=white&labelColor=171717" alt="Live Demo" height="50">
+    <img src="https://img.shields.io/badge/🚀_Live_Demo-Access_AEGIS_Now-FF5722?style=for-the-badge&logo=vercel&logoColor=white&labelColor=171717" alt="Live Demo" height="90">
   </a>
 </div>
 
