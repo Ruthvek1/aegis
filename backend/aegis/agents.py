@@ -1,5 +1,6 @@
 from typing import Any
 from langchain_openai import ChatOpenAI
+from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 
 import os
@@ -35,7 +36,7 @@ tracer = get_tracer(__name__)
 
 def instrument_node(func):
     @functools.wraps(func)
-    async def wrapper(state: AgentState, config: dict | None = None, **kwargs):
+    async def wrapper(state: AgentState, config: RunnableConfig | None = None, **kwargs):
         thread_id = (
             config.get("configurable", {}).get("thread_id", "unknown_run")
             if config
@@ -91,7 +92,7 @@ if os.getenv("NVIDIA_API_KEY_2"):
 _key_iterator = itertools.cycle(_api_keys) if _api_keys else None
 
 # In production we'd use these, but tests will mock get_llm
-def get_llm(temperature: float = 0.0, model_tier: str = "cheap", config: dict | None = None) -> Any:
+def get_llm(temperature: float = 0.0, model_tier: str = "cheap", config: RunnableConfig | None = None) -> Any:
     # We detected DeepSeek and GLM throw 403 (unauthorized/opt-in required) on these keys
     # so we fallback to Llama 3.1 which is verified to work on the free tier!
     power_mode = config.get("configurable", {}).get("power_mode", "low") if config else "low"
@@ -124,7 +125,7 @@ def get_llm(temperature: float = 0.0, model_tier: str = "cheap", config: dict | 
 
 
 @instrument_node
-async def planner_node(state: AgentState, config: dict | None = None) -> dict:
+async def planner_node(state: AgentState, config: RunnableConfig | None = None) -> dict:
     # Try with cheap model first
     llm_cheap = get_llm(temperature=0.0, model_tier="cheap", config=config)
     structured_llm_cheap = llm_cheap.with_structured_output(PlanOutput)
@@ -164,7 +165,7 @@ async def planner_node(state: AgentState, config: dict | None = None) -> dict:
 
 
 @instrument_node
-async def coder_node(state: AgentState, config: dict | None = None) -> dict:
+async def coder_node(state: AgentState, config: RunnableConfig | None = None) -> dict:
     llm = get_llm(temperature=0.7, model_tier="cheap", config=config)
     # The coder is expected to output a JSON block with command to run, or we parse its output.
     # For the mock integration test, we will just simulate reading the LLM's intent and running a command.
@@ -237,7 +238,7 @@ async def coder_node(state: AgentState, config: dict | None = None) -> dict:
 
 
 @instrument_node
-async def critic_node(state: AgentState, config: dict | None = None) -> dict:
+async def critic_node(state: AgentState, config: RunnableConfig | None = None) -> dict:
     llm = get_llm(temperature=0.0, model_tier="frontier", config=config)
     structured_llm = llm.with_structured_output(CriticDecision)
     scratchpad = state.get("scratchpad", {})
@@ -351,7 +352,7 @@ async def synthesizer_node(state: AgentState) -> dict:
 
 
 @instrument_node
-async def chatter_node(state: AgentState, config: dict | None = None) -> dict:
+async def chatter_node(state: AgentState, config: RunnableConfig | None = None) -> dict:
     llm = get_llm(temperature=0.7, model_tier="cheap", config=config)
     prompt = f"The user said: {state.get('task')}\nRespond conversationally in a helpful manner. Keep it brief. Do not write any code, just answer them or ask clarifying questions."
     res = await llm.ainvoke(prompt)
@@ -367,7 +368,7 @@ async def chatter_node(state: AgentState, config: dict | None = None) -> dict:
 
 
 @instrument_node
-async def simple_coder_node(state: AgentState, config: dict | None = None) -> dict:
+async def simple_coder_node(state: AgentState, config: RunnableConfig | None = None) -> dict:
     llm = get_llm(temperature=0.7, model_tier="cheap", config=config)
     prompt = f"The user requested a code snippet or simple technical explanation: {state.get('task')}\nProvide a clean, well-formatted response with the code and a brief explanation. Do not over-explain."
     res = await llm.ainvoke(prompt)

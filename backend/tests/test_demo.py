@@ -41,7 +41,8 @@ class MultiTurnMockChatModel:
 
 @pytest.fixture
 def mock_multi_turn_llm():
-    with patch("aegis.agents.get_llm", return_value=MultiTurnMockChatModel()) as mock:
+    with patch("aegis.agents.get_llm", return_value=MultiTurnMockChatModel()), \
+         patch("aegis.graph.get_llm", return_value=MultiTurnMockChatModel()) as mock:
         yield mock
 
 
