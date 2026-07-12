@@ -1,6 +1,4 @@
 <div align="center">
-  <img src="assets/dashboard.png" width="80px" alt="Logo" style="border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" />
-  <br/><br/>
   <h1>AEGIS (AI-Enhanced Guardian & Intelligence System)</h1>
   <p><strong>A Highly Reliable, Graph-Based Orchestration Framework for Agentic Software Engineering</strong></p>
   
