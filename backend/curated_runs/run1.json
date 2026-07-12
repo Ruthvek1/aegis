@@ -1,0 +1,34 @@
+[
+  {"type": "agent_start", "agent": "planner"},
+  {"type": "token", "content": "I will"},
+  {"type": "token", "content": " plan"},
+  {"type": "token", "content": " the"},
+  {"type": "token", "content": " fix."},
+  {"type": "agent_end", "agent": "planner"},
+  {"type": "handoff", "next": "coder"},
+  {"type": "usage", "cost_usd": 0.005},
+  
+  {"type": "agent_start", "agent": "coder"},
+  {"type": "token", "content": "Writing"},
+  {"type": "token", "content": " code..."},
+  {"type": "tool_call", "tool": "replace_file_content", "input": {"TargetFile": "math_lib.py", "ReplacementContent": "def add(a, b):\n    return a + b"}},
+  {"type": "tool_result", "tool": "replace_file_content", "output": "File updated successfully."},
+  {"type": "agent_end", "agent": "coder"},
+  {"type": "handoff", "next": "critic"},
+  {"type": "usage", "cost_usd": 0.012},
+  
+  {"type": "agent_start", "agent": "critic"},
+  {"type": "token", "content": "LG"},
+  {"type": "token", "content": "TM!"},
+  {"type": "agent_end", "agent": "critic"},
+  {"type": "handoff", "next": "synthesizer"},
+  {"type": "usage", "cost_usd": 0.015},
+
+  {"type": "agent_start", "agent": "synthesizer"},
+  {"type": "token", "content": "Done."},
+  {"type": "agent_end", "agent": "synthesizer"},
+  {"type": "handoff", "next": "END"},
+  {"type": "usage", "cost_usd": 0.016},
+  
+  {"type": "done"}
+]

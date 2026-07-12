@@ -1,0 +1,46 @@
+[
+  {"type": "agent_start", "agent": "supervisor"},
+  {"type": "handoff", "next": "planner"},
+  
+  {"type": "agent_start", "agent": "planner"},
+  {"type": "log", "content": "Developing architecture design..."},
+  {"type": "agent_end", "agent": "planner"},
+  {"type": "handoff", "next": "coder"},
+  
+  {"type": "agent_start", "agent": "coder"},
+  {"type": "log", "content": "Attempting to implement architecture... (Attempt 1)"},
+  {"type": "agent_end", "agent": "coder"},
+  {"type": "handoff", "next": "critic"},
+  
+  {"type": "agent_start", "agent": "critic"},
+  {"type": "log", "content": "Review failed. Code is buggy."},
+  {"type": "agent_end", "agent": "critic"},
+  {"type": "handoff", "next": "coder"},
+  
+  {"type": "agent_start", "agent": "coder"},
+  {"type": "log", "content": "Attempting to implement architecture... (Attempt 2)"},
+  {"type": "agent_end", "agent": "coder"},
+  {"type": "handoff", "next": "critic"},
+  
+  {"type": "agent_start", "agent": "critic"},
+  {"type": "log", "content": "Review failed. Build error."},
+  {"type": "agent_end", "agent": "critic"},
+  {"type": "handoff", "next": "safety_governor"},
+  
+  {"type": "agent_start", "agent": "safety_governor"},
+  {"type": "log", "content": "Budget exhausted (3 attempts). Forcing early synthesis."},
+  {"type": "agent_end", "agent": "safety_governor"},
+  {"type": "handoff", "next": "synthesizer"},
+  
+  {"type": "agent_start", "agent": "synthesizer"},
+  {"type": "token", "content": "I tried my best,"},
+  {"type": "token", "content": " but ran out of budget."},
+  {"type": "token", "content": "\nHere is the partial progress:"},
+  {"type": "agent_end", "agent": "synthesizer"},
+  
+  {"type": "handoff", "next": "END"},
+  
+  {"type": "usage", "cost_usd": 0.054},
+  {"type": "final_result", "content": "I tried my best, but ran out of budget.\nHere is the partial progress: [incomplete code]"},
+  {"type": "done"}
+]

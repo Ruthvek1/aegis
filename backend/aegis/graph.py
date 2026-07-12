@@ -3,6 +3,7 @@ import contextlib
 from langgraph.graph import StateGraph, END, START
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg_pool import AsyncConnectionPool
+from langchain_core.messages import SystemMessage, HumanMessage
 
 from aegis.state import AgentState
 from aegis.agents import (
@@ -11,17 +12,19 @@ from aegis.agents import (
     critic_node,
     researcher_node,
     synthesizer_node,
+    chatter_node,
+    simple_coder_node,
+    get_llm
 )
 
 
-def supervisor_node(state: AgentState) -> dict:
+async def supervisor_node(state: AgentState) -> dict:
     # Router logic. In a full dynamic system, LLM decides.
-    # For the FLAGSHIP flow (fix issue -> PR), the flow is linear with a loop:
-    # START -> Planner -> Researcher -> Coder -> Critic -> (veto? back to Coder) -> Synthesizer -> END
-
+    # We use a fast classification call to avoid wasting RPM on trivial tasks.
+    task = state.get("task", "")
     plan = state.get("plan", [])
     scratchpad = state.get("scratchpad", {})
-    budget = state.get("budget", 3)  # default budget of 3 loops
+    budget = state.get("budget", 3)
     max_cost = state.get("max_cost_usd", 1.0)
     current_cost = state.get("current_cost_usd", 0.0)
 
@@ -34,7 +37,30 @@ def supervisor_node(state: AgentState) -> dict:
         scratchpad["governor_forced_synthesis"] = True
         return {"next": "synthesizer", "budget": 0, "scratchpad": scratchpad}
 
+    if scratchpad.get("chat_done"):
+        return {"next": "END"}
+
     if not plan:
+        # Ask LLM to classify the request to prevent over-planning trivial tasks.
+        llm = get_llm(model_tier="cheap")
+        prompt = f"""Classify the user's request into one of three categories:
+1. PROJECT: A complex task requiring reading files, making a multi-step plan, or modifying an existing codebase.
+2. SNIPPET: A simple request for a piece of code, a script, or an explanation (e.g. "python code for even and odd", "write a bash script", "how to reverse a string").
+3. CHAT: A simple conversational query or greeting (e.g. "hi", "who are you").
+
+User Request: {task}
+Reply strictly with a single word: PROJECT, SNIPPET, or CHAT."""
+        try:
+            res = await llm.ainvoke(prompt)
+            classification = str(res.content).strip().upper()
+        except Exception:
+            classification = "PROJECT"
+        
+        if "CHAT" in classification:
+            return {"next": "chatter", "budget": budget}
+        elif "SNIPPET" in classification:
+            return {"next": "simple_coder", "budget": budget}
+            
         return {"next": "planner", "budget": budget}
 
     if "research_done" not in scratchpad:
@@ -51,12 +77,10 @@ def supervisor_node(state: AgentState) -> dict:
     approved = scratchpad.get("critic_approved")
     if approved:
         # Go to Synthesizer on success.
-        # (HitL pause is handled via interrupt_before=["synthesizer"] during compile)
         return {"next": "synthesizer", "budget": budget, "scratchpad": scratchpad}
     else:
         # Vetoed!
         if budget > 1:
-            # Clear critic_approved so we know it needs review again after coder runs
             scratchpad.pop("critic_approved", None)
             return {"next": "coder", "budget": budget - 1, "scratchpad": scratchpad}
         else:
@@ -80,6 +104,8 @@ def build_graph(checkpointer=None, interrupt_before=None):
     workflow.add_node("critic", critic_node)
     workflow.add_node("researcher", researcher_node)
     workflow.add_node("synthesizer", synthesizer_node)
+    workflow.add_node("chatter", chatter_node)
+    workflow.add_node("simple_coder", simple_coder_node)
 
     workflow.add_edge(START, "supervisor")
 
@@ -88,6 +114,8 @@ def build_graph(checkpointer=None, interrupt_before=None):
     workflow.add_edge("coder", "supervisor")
     workflow.add_edge("critic", "supervisor")
     workflow.add_edge("researcher", "supervisor")
+    workflow.add_edge("chatter", "supervisor")
+    workflow.add_edge("simple_coder", "supervisor")
 
     # Synthesizer always terminates the graph
     workflow.add_edge("synthesizer", END)
@@ -102,6 +130,8 @@ def build_graph(checkpointer=None, interrupt_before=None):
             "critic": "critic",
             "researcher": "researcher",
             "synthesizer": "synthesizer",
+            "chatter": "chatter",
+            "simple_coder": "simple_coder",
             END: END,
         },
     )

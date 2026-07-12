@@ -1,0 +1,17 @@
+[
+  {"type": "agent_start", "agent": "supervisor"},
+  {"type": "usage", "cost_usd": 0.0001},
+  {"type": "handoff", "next": "safety_governor"},
+  
+  {"type": "agent_start", "agent": "safety_governor"},
+  {"type": "log", "content": "Analyzing input for safety violations..."},
+  {"type": "token", "content": "Input flagged as PROMPT INJECTION!"},
+  {"type": "token", "content": " Request blocked for security reasons."},
+  {"type": "agent_end", "agent": "safety_governor"},
+  
+  {"type": "handoff", "next": "END"},
+  {"type": "usage", "cost_usd": 0.0002},
+  
+  {"type": "final_result", "content": "Request blocked. Safety Governor detected prompt injection: 'ignore previous instructions'"},
+  {"type": "done"}
+]

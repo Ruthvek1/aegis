@@ -1,0 +1,17 @@
+[
+  {"type": "agent_start", "agent": "supervisor"},
+  {"type": "handoff", "next": "simple_coder"},
+  {"type": "usage", "cost_usd": 0.0001},
+  
+  {"type": "agent_start", "agent": "simple_coder"},
+  {"type": "token", "content": "Here is"},
+  {"type": "token", "content": " the snippet"},
+  {"type": "token", "content": " you asked for:"},
+  {"type": "token", "content": "\n```python\nprint('Hello World')\n```\n"},
+  {"type": "agent_end", "agent": "simple_coder"},
+  {"type": "handoff", "next": "END"},
+  {"type": "usage", "cost_usd": 0.0015},
+  
+  {"type": "final_result", "content": "Here is the snippet you asked for:\n```python\nprint('Hello World')\n```\n"},
+  {"type": "done"}
+]

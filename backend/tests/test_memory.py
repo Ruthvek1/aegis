@@ -106,13 +106,19 @@ async def test_graph_memory_integration(memory_manager):
 
     # Patch get_memory_manager to use our test mm
     with patch("aegis.agents.get_memory_manager", return_value=memory_manager):
-        # 1. Synthesizer stores a successful run
-        state = {
-            "task": "Test procedural integration",
-            "plan": [{"step": "test"}],
-            "scratchpad": {"coder_output": "Success"},
-        }
-        await synthesizer_node(state)
+        with patch("aegis.agents.get_llm") as mock_llm:
+            # Mock the LLM to just return a dummy response
+            from langchain_core.messages import AIMessage
+            from unittest.mock import AsyncMock
+            mock_llm.return_value.ainvoke = AsyncMock(return_value=AIMessage(content="mock"))
+
+            # 1. Synthesizer stores a successful run
+            state = {
+                "task": "Test procedural integration",
+                "plan": [{"step": "test"}],
+                "scratchpad": {"coder_output": "Success"},
+            }
+            await synthesizer_node(state)
 
         # Verify it wrote to DB
         skills = await memory_manager.retrieve_procedural("Test procedural integration")

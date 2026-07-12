@@ -96,12 +96,7 @@ class MockChatModel:
 
 @pytest.mark.asyncio
 async def test_otel_tracing(exporter, checkpointer, memory_manager):
-    with patch(
-        "aegis.agents.get_llm",
-        return_value=CassetteChatModel(
-            MockChatModel(), "dummy", "claude-3-haiku-20240307"
-        ),
-    ):
+    with patch("aegis.agents.get_llm", return_value=MockChatModel()):
         graph = build_graph(checkpointer=checkpointer)
         thread_id = str(uuid.uuid4())
         config = {"configurable": {"thread_id": thread_id}}

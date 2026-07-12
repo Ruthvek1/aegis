@@ -7,6 +7,10 @@ from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from datetime import datetime
 
 from aegis.graph import build_graph
 from aegis.memory import MemoryManager
@@ -22,19 +26,37 @@ async def lifespan(app: FastAPI):
     db_uri = os.getenv(
         "DATABASE_URL", "postgresql://postgres:password@localhost:5432/aegis"
     )
-    _pool = AsyncConnectionPool(
-        db_uri, kwargs={"autocommit": True, "prepare_threshold": 0}, open=False
-    )
-    await _pool.open()
-    _checkpointer = AsyncPostgresSaver(_pool)  # type: ignore
-    await _checkpointer.setup()
+    
+    try:
+        # Give it a short timeout so it doesn't hang for 30s if DB is offline
+        _pool = AsyncConnectionPool(
+            db_uri, kwargs={"autocommit": True, "prepare_threshold": 0}, open=False, timeout=3.0
+        )
+        await _pool.open()
+        _checkpointer = AsyncPostgresSaver(_pool)  # type: ignore
+        await _checkpointer.setup()
 
-    mm = MemoryManager(db_uri)
-    await mm.open()
-    await mm._ensure_ready()
-    import aegis.memory
-
-    aegis.memory._global_mm = mm
+        mm = MemoryManager(db_uri)
+        await mm.open()
+        await mm._ensure_ready()
+        import aegis.memory
+        aegis.memory._global_mm = mm
+        print("✅ Database connected successfully.")
+    except Exception as e:
+        print(f"⚠️ Warning: Database connection failed on startup: {e}")
+        print("⚠️ AEGIS is running in degraded mode (In-Memory Checkpointer & No DB persistence).")
+        
+        from langgraph.checkpoint.memory import MemorySaver
+        _checkpointer = MemorySaver()
+        
+        class DummyMemoryManager:
+            async def open(self): pass
+            async def close(self): pass
+            async def record_event(self, *args, **kwargs): pass
+            async def search_events(self, *args, **kwargs): return []
+            
+        import aegis.memory
+        aegis.memory._global_mm = DummyMemoryManager()
 
     yield
 
@@ -47,9 +69,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AEGIS Control Plane", lifespan=lifespan)
 
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,11 +86,13 @@ _pool: Optional[AsyncConnectionPool] = None
 _checkpointer: Optional[AsyncPostgresSaver] = None
 _pending_runs: Dict[str, dict] = {}
 _active_tasks: Dict[str, asyncio.Task] = {}
-
+_daily_spend_usd: Dict[str, float] = {}
 
 class StartRunRequest(BaseModel):
     task: str
-    mode: str = "flagship"
+    mode: str = "replay"
+    api_key: Optional[str] = None
+    captcha_token: Optional[str] = None
     budget: int = 10
     max_cost_usd: float = 0.5
 
@@ -74,16 +102,30 @@ class ResumeRunRequest(BaseModel):
 
 
 @app.post("/runs")
-async def start_run(request: StartRunRequest):
+@limiter.limit("5/minute")
+async def start_run(request: Request, body: StartRunRequest):
     run_id = str(uuid.uuid4())
+    
+    mode = body.mode
+    today = datetime.now().date().isoformat()
+    if today not in _daily_spend_usd:
+        _daily_spend_usd[today] = 0.0
+
+    if mode == "demo":
+        if not body.captcha_token or len(body.captcha_token) < 5:
+            raise HTTPException(status_code=400, detail="Invalid CAPTCHA token")
+        if _daily_spend_usd[today] >= 0.50:
+            mode = "replay" # Kill-switch fallback
+
     _pending_runs[run_id] = {
-        "task": request.task,
-        "mode": request.mode,
-        "budget": request.budget,
-        "max_cost_usd": request.max_cost_usd,
+        "task": body.task,
+        "mode": mode,
+        "api_key": body.api_key,
+        "budget": body.budget,
+        "max_cost_usd": body.max_cost_usd,
         "type": "start",
     }
-    return {"run_id": run_id}
+    return {"run_id": run_id, "mode": mode}
 
 
 @app.post("/runs/{run_id}/resume")
@@ -106,8 +148,8 @@ async def list_runs():
     import aegis.memory
 
     mm = aegis.memory._global_mm
-    # The event log has run events, but it's easier to just list unique thread_ids
-    if not mm:
+    # The event log has run events, but it's easier to list unique thread_ids
+    if not mm or not hasattr(mm, 'pool'):
         return {"runs": []}
 
     async with mm.pool.connection() as conn:
@@ -124,8 +166,8 @@ async def get_transcript(run_id: str):
     import aegis.memory
 
     mm = aegis.memory._global_mm
-    if not mm:
-        raise HTTPException(status_code=500, detail="Database not ready")
+    if not mm or not hasattr(mm, 'pool'):
+        return {"run_id": run_id, "events": []}
 
     async with mm.pool.connection() as conn:
         async with conn.cursor() as cur:
@@ -141,8 +183,20 @@ async def get_transcript(run_id: str):
     }
 
 
-async def _run_graph_stream(run_id: str, graph, config: dict, input_data: Any):
+async def _run_graph_stream(run_id: str, graph, config: dict, input_data: Any, mode: str = "flagship"):
     try:
+        if mode == "replay":
+            import os
+            base_dir = os.path.dirname(__file__)
+            run_file = os.path.join(base_dir, "..", "curated_runs", "run1.json")
+            if os.path.exists(run_file):
+                with open(run_file, "r") as f:
+                    events = json.load(f)
+                for ev in events:
+                    yield f"data: {json.dumps(ev)}\n\n"
+                    await asyncio.sleep(0.05)
+            return
+
         async for event in graph.astream_events(
             input_data, version="v2", config=config
         ):
@@ -158,6 +212,8 @@ async def _run_graph_stream(run_id: str, graph, config: dict, input_data: Any):
                     "critic",
                     "researcher",
                     "synthesizer",
+                    "chatter",
+                    "simple_coder",
                 ]:
                     mapped_event = {"type": "agent_start", "agent": name}
 
@@ -192,19 +248,29 @@ async def _run_graph_stream(run_id: str, graph, config: dict, input_data: Any):
                     "critic",
                     "researcher",
                     "synthesizer",
+                    "chatter",
+                    "simple_coder",
                 ]:
                     mapped_event = {"type": "agent_end", "agent": name}
                     # Check for handoff
                     output = event["data"].get("output")
-                    if output and isinstance(output, dict) and "next" in output:
-                        yield f"data: {json.dumps({'type': 'handoff', 'next': output['next']})}\n\n"
+                    if output and isinstance(output, dict):
+                        if "next" in output:
+                            yield f"data: {json.dumps({'type': 'handoff', 'next': output['next']})}\n\n"
+                        if "final_result" in output:
+                            yield f"data: {json.dumps({'type': 'final_result', 'content': output['final_result']})}\n\n"
                     # Emit usage if any cost accumulated
                     if (
                         output
                         and isinstance(output, dict)
                         and "current_cost_usd" in output
                     ):
-                        yield f"data: {json.dumps({'type': 'usage', 'cost_usd': output['current_cost_usd']})}\n\n"
+                        cost = output["current_cost_usd"]
+                        from datetime import datetime
+                        today = datetime.now().date().isoformat()
+                        if today in _daily_spend_usd:
+                            _daily_spend_usd[today] += cost
+                        yield f"data: {json.dumps({'type': 'usage', 'cost_usd': cost})}\n\n"
 
             elif event_type == "on_chain_error":
                 mapped_event = {
@@ -257,7 +323,13 @@ async def stream_run(run_id: str, request: Request):
         if current_task:
             _active_tasks[run_id] = current_task
 
-        async for chunk in _run_graph_stream(run_id, graph, config, input_data):
+        from aegis.api_key import current_api_key
+        api_key = pending.get("api_key")
+        if api_key:
+            current_api_key.set(api_key)
+
+        mode = pending.get("mode", "flagship")
+        async for chunk in _run_graph_stream(run_id, graph, config, input_data, mode):
             # Check if the client disconnected
             if await request.is_disconnected():
                 if current_task:

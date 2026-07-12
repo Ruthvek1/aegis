@@ -57,18 +57,29 @@ def mock_llm():
 
 @pytest.mark.asyncio
 async def test_supervisor_routing():
-    # Unit test for routing
-    state = {"plan": [], "scratchpad": {}, "budget": 3}
-    res = supervisor_node(state)
-    assert res["next"] == "planner"
-    assert res["budget"] == 3
+    # Mock the LLM used for classification in supervisor_node
+    mock_classify_llm = MagicMock()
+    mock_classify_llm.ainvoke = MagicMock(return_value=MagicMock(content="PROJECT"))
+    # Make ainvoke a proper coroutine
+    import asyncio
+    async def mock_ainvoke(*args, **kwargs):
+        return MagicMock(content="PROJECT")
+    mock_classify_llm.ainvoke = mock_ainvoke
 
+    with patch("aegis.graph.get_llm", return_value=mock_classify_llm):
+        # Unit test for routing - no plan → planner (after LLM classifies as PROJECT)
+        state = {"plan": [], "scratchpad": {}, "budget": 3, "task": "build a system"}
+        res = await supervisor_node(state)
+        assert res["next"] == "planner"
+        assert res["budget"] == 3
+
+    # These don't trigger the LLM call since plan exists
     state = {"plan": [{"step": 1}], "scratchpad": {}, "budget": 3}
-    res = supervisor_node(state)
+    res = await supervisor_node(state)
     assert res["next"] == "researcher"
 
     state = {"plan": [{"step": 1}], "scratchpad": {"research_done": True}, "budget": 3}
-    res = supervisor_node(state)
+    res = await supervisor_node(state)
     assert res["next"] == "coder"
 
     state = {
@@ -76,7 +87,7 @@ async def test_supervisor_routing():
         "scratchpad": {"research_done": True, "coder_output": "code"},
         "budget": 3,
     }
-    res = supervisor_node(state)
+    res = await supervisor_node(state)
     assert res["next"] == "critic"
 
     state = {
@@ -89,7 +100,7 @@ async def test_supervisor_routing():
         "budget": 3,
     }
 
-    res = supervisor_node(state)
+    res = await supervisor_node(state)
     assert res["next"] == "synthesizer"
 
 

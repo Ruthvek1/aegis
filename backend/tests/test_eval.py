@@ -4,16 +4,21 @@ from unittest.mock import patch
 
 
 # We test the eval harness scripts logic
-def test_eval_component_fails_on_broken_planner():
+@pytest.mark.asyncio
+async def test_eval_component_fails_on_broken_planner():
     # If we patch supervisor_node to return a bad next step, eval_component should raise Exception
     with patch("aegis.graph.supervisor_node") as mock_supervisor:
         # Mock it to return an empty plan / bad routing
-        mock_supervisor.return_value = {"next": "unknown"}
+        # Return a mock coroutine
+        import asyncio
+        async def mock_async_supervisor(*args, **kwargs):
+            return {"next": "unknown"}
+        mock_supervisor.side_effect = mock_async_supervisor
 
         from evals.run_eval import eval_component
 
         with pytest.raises(Exception, match="Broken Planner Router!"):
-            eval_component()
+            await eval_component()
 
 
 @pytest.mark.asyncio
@@ -46,9 +51,11 @@ def test_eval_baseline_regression_fails():
             "tool_error_rate": 0.0,
         }
 
+    from unittest.mock import AsyncMock
+
     with patch("evals.run_eval.eval_outcome", new=mock_eval_outcome):
-        with patch("evals.run_eval.eval_component", return_value=None):
-            with patch("evals.run_eval.eval_trajectory", return_value=None):
+        with patch("evals.run_eval.eval_component", new_callable=AsyncMock):
+            with patch("evals.run_eval.eval_trajectory", new_callable=AsyncMock):
                 with patch("sys.exit") as mock_exit:
                     with patch(
                         "evals.run_eval.get_dataset", return_value=[{"id": "issue_1"}]

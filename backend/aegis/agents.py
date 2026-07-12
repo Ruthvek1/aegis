@@ -1,5 +1,5 @@
 from typing import Any
-from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 import os
@@ -10,6 +10,7 @@ from aegis.state import AgentState
 from aegis.memory import get_memory_manager
 from aegis.sandbox import run_in_sandbox
 from aegis.mcp_server import SANDBOX_IMAGE
+import itertools
 
 
 class SupervisorDecision(BaseModel):
@@ -81,14 +82,36 @@ def instrument_node(func):
     return wrapper
 
 
+_api_keys = []
+if os.getenv("NVIDIA_API_KEY_1"):
+    _api_keys.append(os.getenv("NVIDIA_API_KEY_1"))
+if os.getenv("NVIDIA_API_KEY_2"):
+    _api_keys.append(os.getenv("NVIDIA_API_KEY_2"))
+
+_key_iterator = itertools.cycle(_api_keys) if _api_keys else None
+
 # In production we'd use these, but tests will mock get_llm
 def get_llm(temperature: float = 0.0, model_tier: str = "cheap") -> Any:
-    if model_tier == "frontier":
-        model_name = "claude-3-5-sonnet-20241022"
-    else:
-        model_name = "claude-3-haiku-20240307"
+    # We detected DeepSeek and GLM throw 403 (unauthorized/opt-in required) on these keys
+    # so we fallback to Llama 3.1 which is verified to work on the free tier!
+    model_name = "meta/llama-3.1-8b-instruct" if model_tier == "cheap" else "meta/llama-3.1-70b-instruct"
 
-    llm = ChatAnthropic(model_name=model_name, temperature=temperature, max_retries=2)  # type: ignore
+    from aegis.api_key import current_api_key
+    byo_key = current_api_key.get()
+
+    llm_kwargs = {
+        "model": model_name,
+        "temperature": temperature,
+        "max_retries": 2,
+        "base_url": "https://integrate.api.nvidia.com/v1"
+    }
+    
+    if byo_key:
+        llm_kwargs["api_key"] = byo_key
+    elif _key_iterator:
+        llm_kwargs["api_key"] = next(_key_iterator)
+
+    llm = ChatOpenAI(**llm_kwargs)  # type: ignore
     from aegis.cassette import CassetteChatModel
 
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -315,4 +338,41 @@ async def synthesizer_node(state: AgentState) -> dict:
         "Fix Error", "Distilled from run", [{"tool": "execute_python"}], True
     )
 
-    return {"scratchpad": scratchpad}
+    llm = get_llm(temperature=0.0, model_tier="cheap")
+    prompt = f"The user asked for: {task}\nThe AI agent produced this final output/code: {outcome}\n\nProvide a clean, concise final answer or code snippet that directly answers the user's request. Do not include any planning process or internal thoughts, just the final answer."
+    res = await llm.ainvoke(prompt)
+    final_result = str(res.content)
+
+    return {"scratchpad": scratchpad, "final_result": final_result}
+
+
+@instrument_node
+async def chatter_node(state: AgentState) -> dict:
+    llm = get_llm(temperature=0.7, model_tier="cheap")
+    prompt = f"The user said: {state.get('task')}\nRespond conversationally in a helpful manner. Keep it brief. Do not write any code, just answer them or ask clarifying questions."
+    res = await llm.ainvoke(prompt)
+    
+    scratchpad = state.get("scratchpad", {})
+    scratchpad["chat_done"] = True
+    
+    return {
+        "scratchpad": scratchpad,
+        "final_result": str(res.content),
+        "plan": [{"task": "Chat", "steps": [{"step": "Response", "description": str(res.content)}]}]
+    }
+
+
+@instrument_node
+async def simple_coder_node(state: AgentState) -> dict:
+    llm = get_llm(temperature=0.7, model_tier="cheap")
+    prompt = f"The user requested a code snippet or simple technical explanation: {state.get('task')}\nProvide a clean, well-formatted response with the code and a brief explanation. Do not over-explain."
+    res = await llm.ainvoke(prompt)
+    
+    scratchpad = state.get("scratchpad", {})
+    scratchpad["chat_done"] = True  # We use chat_done to signal the graph to exit early
+    
+    return {
+        "scratchpad": scratchpad,
+        "final_result": str(res.content),
+        "plan": [{"task": "Generate Code Snippet", "steps": [{"step": "Write Code", "description": "Writing requested snippet directly."}]}]
+    }

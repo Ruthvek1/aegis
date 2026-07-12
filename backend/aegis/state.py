@@ -25,3 +25,4 @@ class AgentState(TypedDict, total=False):
     max_cost_usd: float
     current_cost_usd: float
     next: str
+    final_result: str

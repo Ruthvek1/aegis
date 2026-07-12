@@ -1,0 +1,210 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.11.13, pytest-9.1.1, pluggy-1.6.0 -- /Users/ruthvekkannan/Git Project/AEGIS/backend/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/ruthvekkannan/Git Project/AEGIS/backend
+configfile: pyproject.toml
+plugins: anyio-4.14.1, asyncio-1.4.0, langsmith-0.9.7
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 41 items
+
+seed_repo/test_math_lib.py::test_add PASSED                              [  2%]
+seed_repo/test_math_lib.py::test_subtract PASSED                         [  4%]
+seed_repo/test_math_lib.py::test_multiply PASSED                         [  7%]
+seed_repo/test_math_lib.py::test_divide PASSED                           [  9%]
+tests/test_api.py::test_start_run PASSED                                 [ 12%]
+tests/test_api.py::test_resume_run PASSED                                [ 14%]
+tests/test_api.py::test_cancel_run PASSED                                [ 17%]
+tests/test_api.py::test_cors_headers PASSED                              [ 19%]
+tests/test_api.py::test_stream_run PASSED                                [ 21%]
+tests/test_demo.py::test_flagship_demo_mocked PASSED                     [ 24%]
+tests/test_demo_live.py::test_flagship_demo_live SKIPPED (LIVE_API not
+set)                                                                     [ 26%]
+tests/test_eval.py::test_eval_component_fails_on_broken_planner FAILED   [ 29%]
+tests/test_eval.py::test_eval_trajectory_catches_hallucination PASSED    [ 31%]
+tests/test_eval.py::test_eval_baseline_regression_fails PASSED           [ 34%]
+tests/test_graph.py::test_supervisor_routing PASSED                      [ 36%]
+tests/test_graph.py::test_happy_path PASSED                              [ 39%]
+tests/test_graph.py::test_veto_budget PASSED                             [ 41%]
+tests/test_graph.py::test_crash_recovery PASSED                          [ 43%]
+tests/test_memory.py::test_episodic_memory_ranking PASSED                [ 46%]
+tests/test_memory.py::test_procedural_skill_loop PASSED                  [ 48%]
+tests/test_memory.py::test_semantic_extraction PASSED                    [ 51%]
+tests/test_memory.py::test_transactional_integrity PASSED                [ 53%]
+tests/test_memory.py::test_graph_memory_integration FAILED               [ 56%]
+tests/test_observability.py::test_otel_tracing FAILED                    [ 58%]
+tests/test_observability.py::test_event_log_replay PASSED                [ 60%]
+tests/test_observability.py::test_cassette_determinism PASSED            [ 63%]
+tests/test_observability.py::test_cassette_stable_hash PASSED            [ 65%]
+tests/test_observability.py::test_fork_from_step PASSED                  [ 68%]
+tests/test_run_modes.py::test_demo_mode_requires_captcha PASSED          [ 70%]
+tests/test_run_modes.py::test_demo_mode_valid_captcha PASSED             [ 73%]
+tests/test_run_modes.py::test_demo_mode_fallback_to_replay PASSED        [ 75%]
+tests/test_run_modes.py::test_byo_key_mode PASSED                        [ 78%]
+tests/test_safety_governor.py::test_governor_forces_early_synthesis PASSED [ 80%]
+tests/test_safety_governor.py::test_router_saves_cost_via_cheap_model PASSED [ 82%]
+tests/test_safety_governor.py::test_prompt_injection_flagged PASSED      [ 85%]
+tests/test_sandbox.py::test_docker_available PASSED                      [ 87%]
+tests/test_sandbox.py::test_sandbox_network_isolation PASSED             [ 90%]
+tests/test_sandbox.py::test_sandbox_fork_bomb PASSED                     [ 92%]
+tests/test_tools.py::test_mcp_client_server_integration PASSED           [ 95%]
+tests/test_tools.py::test_bad_args_self_correction PASSED                [ 97%]
+tests/test_tools.py::test_bad_args_bound_exhaustion PASSED               [100%]
+
+=================================== FAILURES ===================================
+_________________ test_eval_component_fails_on_broken_planner __________________
+
+    def test_eval_component_fails_on_broken_planner():
+        # If we patch supervisor_node to return a bad next step, eval_component should raise Exception
+        with patch("aegis.graph.supervisor_node") as mock_supervisor:
+            # Mock it to return an empty plan / bad routing
+            mock_supervisor.return_value = {"next": "unknown"}
+    
+            from evals.run_eval import eval_component
+    
+>           with pytest.raises(Exception, match="Broken Planner Router!"):
+E           AssertionError: Regex pattern did not match.
+E             Expected regex: 'Broken Planner Router!'
+E             Actual message: "'coroutine' object is not subscriptable"
+
+tests/test_eval.py:15: AssertionError
+----------------------------- Captured stdout call -----------------------------
+
+--- Running Component Eval ---
+________________________ test_graph_memory_integration _________________________
+
+memory_manager = <aegis.memory.MemoryManager object at 0x1114fe050>
+
+    @pytest.mark.asyncio
+    async def test_graph_memory_integration(memory_manager):
+        from aegis.agents import synthesizer_node, planner_node
+    
+        # Patch get_memory_manager to use our test mm
+        with patch("aegis.agents.get_memory_manager", return_value=memory_manager):
+            # 1. Synthesizer stores a successful run
+            state = {
+                "task": "Test procedural integration",
+                "plan": [{"step": "test"}],
+                "scratchpad": {"coder_output": "Success"},
+            }
+>           await synthesizer_node(state)
+
+tests/test_memory.py:115: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+aegis/agents.py:58: in wrapper
+    res = await func(state, **kwargs) if is_async else func(state, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+aegis/agents.py:343: in synthesizer_node
+    res = await llm.ainvoke(prompt)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <aegis.cassette.CassetteChatModel object at 0x1114d0dd0>
+prompt = "The user asked for: Test procedural integration\nThe AI agent produced this final output/code: Success\n\nProvide a c... directly answers the user's request. Do not include any planning process or internal thoughts, just the final answer."
+args = (), kwargs = {}
+
+    async def ainvoke(self, prompt, *args, **kwargs):
+        with self.tracer.start_as_current_span("llm_call") as span:
+            prompt_val = self._prepare_prompt_for_hash(prompt)
+            key = hash_prompt(prompt_val, kwargs)
+            file_path = os.path.join(self.cassette_dir, f"{key}.json")
+    
+            if self.mode == "replay":
+                if not os.path.exists(file_path):
+>                   raise ValueError(
+                        f"Cassette not found for key {key}. Run in 'record' mode first."
+                    )
+E                   ValueError: Cassette not found for key e48b6a56e0a54c167f34585f2063611c800081ff4aeae8839c0f9d4408f1be36. Run in 'record' mode first.
+
+aegis/cassette.py:86: ValueError
+______________________________ test_otel_tracing _______________________________
+
+exporter = <opentelemetry.sdk.trace.export.in_memory_span_exporter.InMemorySpanExporter object at 0x111344050>
+checkpointer = <langgraph.checkpoint.postgres.aio.AsyncPostgresSaver object at 0x111360750>
+memory_manager = <aegis.memory.MemoryManager object at 0x111361410>
+
+    @pytest.mark.asyncio
+    async def test_otel_tracing(exporter, checkpointer, memory_manager):
+        with patch(
+            "aegis.agents.get_llm",
+            return_value=CassetteChatModel(
+                MockChatModel(), "dummy", "claude-3-haiku-20240307"
+            ),
+        ):
+            graph = build_graph(checkpointer=checkpointer)
+            thread_id = str(uuid.uuid4())
+            config = {"configurable": {"thread_id": thread_id}}
+    
+>           await graph.ainvoke({"task": "Tracing test"}, config)
+
+tests/test_observability.py:109: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.11/site-packages/langgraph/pregel/main.py:4105: in ainvoke
+    async for chunk in self.astream(
+.venv/lib/python3.11/site-packages/langgraph/pregel/main.py:3455: in astream
+    async for _ in runner.atick(
+.venv/lib/python3.11/site-packages/langgraph/pregel/_runner.py:396: in atick
+    await arun_with_retry(
+.venv/lib/python3.11/site-packages/langgraph/pregel/_retry.py:744: in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/langgraph/_internal/_runnable.py:733: in ainvoke
+    input = await asyncio.create_task(
+.venv/lib/python3.11/site-packages/langgraph/_internal/_runnable.py:501: in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+aegis/agents.py:58: in wrapper
+    res = await func(state, **kwargs) if is_async else func(state, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+aegis/agents.py:153: in planner_node
+    res = await structured_llm_frontier.ainvoke(prompt)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <aegis.cassette.CassetteChatModel.with_structured_output.<locals>.CassetteStructuredRunnable object at 0x111342bd0>
+prompt = "Create a plan for: Task: Tracing test\nEpisodic: [{'task': 'Test procedural integration', 'plan': [{'step': 'test'}],...description': 'Distilled from run', 'tool_sequence': [{'tool': 'execute_python'}], 'similarity': 0.11547005864799398}]"
+args = (), kw = {}
+
+    async def ainvoke(self, prompt, *args, **kw):
+        with self.parent.tracer.start_as_current_span("llm_call_structured"):
+            prompt_val = self.parent._prepare_prompt_for_hash(prompt)
+            schema_name = (
+                self.schema.__name__
+                if hasattr(self.schema, "__name__")
+                else str(self.schema)
+            )
+            merged_kw = {**kw, "schema": schema_name}
+    
+            key = hash_prompt(prompt_val, merged_kw)
+            file_path = os.path.join(self.parent.cassette_dir, f"{key}.json")
+    
+            if self.parent.mode == "replay":
+                if not os.path.exists(file_path):
+>                   raise ValueError(f"Cassette not found for key {key}")
+E                   ValueError: Cassette not found for key 7986cd6c80510582fc243c74139aadf343c1a85dbb5cce8a55516e8e62719b02
+E                   During task with name 'planner' and id 'a5e92e08-c307-3e3d-ac3c-abb4d8988f3a'
+
+aegis/cassette.py:128: ValueError
+=============================== warnings summary ===============================
+test_nvidia.py:10
+  /Users/ruthvekkannan/Git Project/AEGIS/backend/test_nvidia.py:10: PytestCollectionWarning: cannot collect test class 'TestSchema' because it has a __init__ constructor (from: test_nvidia.py)
+    class TestSchema(BaseModel):
+
+tests/test_eval.py::test_eval_baseline_regression_fails
+  /opt/homebrew/Cellar/python@3.11/3.11.13/Frameworks/Python.framework/Versions/3.11/lib/python3.11/unittest/mock.py:2133: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    setattr(_type, entry, MagicProxy(entry, self))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_observability.py::test_cassette_determinism
+  /Users/ruthvekkannan/Git Project/AEGIS/backend/aegis/cassette.py:100: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    json.dump(res.dict(), f, indent=2)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_eval.py::test_eval_component_fails_on_broken_planner - AssertionError: Regex pattern did not match.
+  Expected regex: 'Broken Planner Router!'
+  Actual message: "'coroutine' object is not subscriptable"
+FAILED tests/test_memory.py::test_graph_memory_integration - ValueError: Cassette not found for key e48b6a56e0a54c167f34585f2063611c800081ff4aeae8839c0f9d4408f1be36. Run in 'record' mode first.
+FAILED tests/test_observability.py::test_otel_tracing - ValueError: Cassette not found for key 7986cd6c80510582fc243c74139aadf343c1a85dbb5cce8a55516e8e62719b02
+During task with name 'planner' and id 'a5e92e08-c307-3e3d-ac3c-abb4d8988f3a'
+============= 3 failed, 37 passed, 1 skipped, 3 warnings in 34.96s =============

@@ -1,0 +1,16 @@
+{
+  "content": "mocked output",
+  "additional_kwargs": {},
+  "response_metadata": {
+    "usage": {
+      "input_tokens": 100,
+      "output_tokens": 50
+    }
+  },
+  "type": "ai",
+  "name": null,
+  "id": null,
+  "tool_calls": [],
+  "invalid_tool_calls": [],
+  "usage_metadata": null
+}

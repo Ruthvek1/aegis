@@ -2,11 +2,13 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter
 
-# Pricing for Anthropic models per 1M tokens (Input / Output)
+# Pricing for models per 1M tokens (Input / Output)
 MODEL_PRICING = {
     # Haiku pricing: $0.25 per 1M input, $1.25 per 1M output
     "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
-    # Other models can be added here
+    # NVIDIA Llama 3.1 Pricing (Approximate)
+    "meta/llama-3.1-8b-instruct": {"input": 0.15, "output": 0.15},
+    "meta/llama-3.1-70b-instruct": {"input": 0.88, "output": 0.88},
 }
 
 

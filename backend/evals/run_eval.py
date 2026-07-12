@@ -79,11 +79,11 @@ async def eval_outcome(issues) -> Dict[str, Any]:
     }
 
 
-def eval_component():
+async def eval_component():
     print("\n--- Running Component Eval ---")
     # deterministic test for router
-    state = {"plan": [], "scratchpad": {}, "budget": 3}
-    res = supervisor_node(state)
+    state = {"plan": [], "scratchpad": {}, "budget": 3, "task": "build a system"}
+    res = await supervisor_node(state)
     if res["next"] != "planner":
         raise Exception("Broken Planner Router!")
 
@@ -93,7 +93,7 @@ def eval_component():
         "coder_output": "code",
         "critic_approved": True,
     }
-    res = supervisor_node(state)
+    res = await supervisor_node(state)
     if res["next"] != "synthesizer":
         raise Exception("Broken Synthesizer Router!")
     print("  [PASS] Component evaluations")
@@ -125,7 +125,7 @@ async def main():
         sys.exit(1)
 
     try:
-        eval_component()
+        await eval_component()
         await eval_trajectory()
         metrics = await eval_outcome(issues)
     except Exception as e:
