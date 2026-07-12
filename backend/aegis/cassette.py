@@ -128,6 +128,15 @@ class CassetteChatModel:
                             raise ValueError(f"Cassette not found for key {key}")
                         with open(file_path, "r") as f:
                             data = json.load(f)
+                            if isinstance(data, dict) and "content" in data:
+                                content = data.get("content")
+                                if isinstance(content, str):
+                                    try:
+                                        data = json.loads(content)
+                                    except json.JSONDecodeError:
+                                        data = {"content": content}
+                                else:
+                                    data = content
                             # Telemetry for structured output replay? We don't have usage in the parsed data.
                             # So cost is 0 or we store usage explicitly. Let's just store the response object.
                             # Wait, structured output returns parsed data, not AIMessage.

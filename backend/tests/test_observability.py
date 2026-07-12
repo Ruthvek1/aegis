@@ -1,6 +1,7 @@
 import pytest
 import pytest_asyncio
 import os
+import json
 import uuid
 import shutil
 from unittest.mock import patch
@@ -152,6 +153,37 @@ async def test_cassette_determinism(cassette_dir):
     res2 = await model2.ainvoke("Tell me a joke")
 
     assert res1.content == res2.content
+    os.environ.pop("LIVE_API_CASSETTE")
+
+
+@pytest.mark.asyncio
+async def test_structured_replay_supports_message_envelope(cassette_dir):
+    from aegis.agents import PlanOutput
+
+    prompt = "Create plan"
+    key = hash_prompt(prompt, {"schema": "PlanOutput"})
+    cassette_path = os.path.join(cassette_dir, f"{key}.json")
+    with open(cassette_path, "w") as f:
+        json_payload = {"plan": [{"step": "1", "action": "test"}]}
+        wrapped = {
+            "content": json.dumps(json_payload),
+            "response_metadata": {"usage": {"input_tokens": 10, "output_tokens": 5}},
+        }
+        json.dump(wrapped, f)
+
+    class ShouldNotRunModel:
+        def with_structured_output(self, schema, **kwargs):
+            class BrokenRunnable:
+                async def ainvoke(self, *a, **k):
+                    raise AssertionError("Network call should not happen in replay mode")
+
+            return BrokenRunnable()
+
+    os.environ["LIVE_API_CASSETTE"] = "replay"
+    model = CassetteChatModel(ShouldNotRunModel(), cassette_dir, "claude-3-haiku-20240307")
+    result = await model.with_structured_output(PlanOutput).ainvoke(prompt)
+    assert isinstance(result, PlanOutput)
+    assert result.plan[0]["action"] == "test"
     os.environ.pop("LIVE_API_CASSETTE")
 
 
