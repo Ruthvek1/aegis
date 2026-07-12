@@ -128,9 +128,16 @@ class CassetteChatModel:
                             raise ValueError(f"Cassette not found for key {key}")
                         with open(file_path, "r") as f:
                             data = json.load(f)
-                            # Telemetry for structured output replay? We don't have usage in the parsed data.
-                            # So cost is 0 or we store usage explicitly. Let's just store the response object.
-                            # Wait, structured output returns parsed data, not AIMessage.
+                            
+                            # Backward compatibility: if cassette stored raw AIMessage dict
+                            if isinstance(data, dict) and "content" in data and isinstance(data["content"], str):
+                                try:
+                                    # Attempt to parse the JSON string inside content
+                                    parsed_content = json.loads(data["content"])
+                                    data = parsed_content
+                                except Exception:
+                                    pass
+
                             if hasattr(self.schema, "model_validate"):
                                 return self.schema.model_validate(data)
                             elif hasattr(self.schema, "parse_obj"):
