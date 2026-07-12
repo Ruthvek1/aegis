@@ -43,3 +43,4 @@ jobs:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/aegis
           LIVE_API_CASSETTE: replay
           PYTHONPATH: "."
+          OPENAI_API_KEY: "test-dummy-key"
