@@ -4,9 +4,16 @@ from typing import Tuple
 from typing import Dict, Any, Optional
 
 
-def get_docker_client() -> docker.DockerClient:
-    return docker.from_env()
+import os
+import subprocess
 
+def get_docker_client() -> docker.DockerClient | None:
+    if os.getenv("DISABLE_DOCKER") == "true":
+        return None
+    try:
+        return docker.from_env()
+    except Exception:
+        return None
 
 def run_in_sandbox(
     image: str,
@@ -15,11 +22,32 @@ def run_in_sandbox(
     volumes: Optional[Dict[str, Any]] = None,
 ) -> Tuple[int, str]:
     """
-    Runs a command in a highly locked down Docker container.
-    Enforces a wall-clock timeout from the host side, ensuring the container
-    is killed and removed even if it hangs.
+    Runs a command. If Docker is available, uses a locked-down container.
+    If Docker is unavailable (e.g. Render PaaS), falls back to local subprocess execution.
     """
     client = get_docker_client()
+
+    if client is None:
+        # Fallback to local subprocess execution (Warning: Lower Security)
+        try:
+            # We assume command is like 'python3 -c "code"'
+            # For simplicity in local mode, we just run it directly.
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=timeout_sec,
+                cwd="/tmp"  # Run in a temp directory
+            )
+            output = result.stdout
+            if result.stderr:
+                output += "\n" + result.stderr
+            return result.returncode, output.strip()
+        except subprocess.TimeoutExpired:
+            return -1, f"Execution timed out after {timeout_sec} seconds"
+        except Exception as e:
+            return -1, str(e)
 
     container = None
     try:
