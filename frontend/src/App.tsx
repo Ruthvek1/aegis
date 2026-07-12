@@ -5,7 +5,7 @@ import { GraphPane } from './components/GraphPane';
 import { TranscriptPane } from './components/TranscriptPane';
 import { Scrubber } from './components/Scrubber';
 import { ApprovalModal } from './components/ApprovalModal';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, ShieldCheck } from 'lucide-react';
 
 export default function App() {
   const { events, activeNode, costUsd, isRunning, isPaused, startRun, cancelRun, resumeRun, startTime } = useAgentStore();
@@ -39,6 +39,62 @@ export default function App() {
   const isLatest = scrubIndex === -1 || scrubIndex >= events.length;
   const displayActiveNode = isLatest ? activeNode : scrubbedActiveNode;
   const displayCost = isLatest ? costUsd : scrubbedCost;
+
+  const [backendState, setBackendState] = useState<'waking' | 'online'>('waking');
+
+  useEffect(() => {
+    let mounted = true;
+    const checkHealth = async () => {
+      try {
+        const res = await fetch('/api/runs');
+        if (res.ok && mounted) {
+          setBackendState('online');
+          return true;
+        }
+      } catch (e) {
+        // network error, backend still waking
+      }
+      return false;
+    };
+
+    const poll = async () => {
+      if (await checkHealth()) return;
+      if (!mounted) return;
+      setTimeout(poll, 3000);
+    };
+    poll();
+    return () => { mounted = false; };
+  }, []);
+
+  if (backendState === 'waking') {
+    return (
+      <div className="flex flex-col h-screen w-screen bg-background items-center justify-center relative overflow-hidden">
+        {/* Background glow effects */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[100px] pointer-events-none opacity-50" />
+        
+        <div className="z-10 flex flex-col items-center max-w-md text-center space-y-6 p-8 bg-card/30 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl">
+          <div className="relative">
+            <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl animate-pulse" />
+            <div className="relative bg-background p-4 rounded-full border border-primary/30">
+              <ShieldCheck size={48} className="text-primary animate-pulse" />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">Waking up AEGIS</h1>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              We are spinning up the free-tier cloud environment. This usually takes about <strong className="text-primary/80">30 to 50 seconds</strong>. Please hold on!
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 px-4 py-2 bg-secondary/50 rounded-full border border-border">
+            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm font-medium text-foreground tracking-wide">Connecting to Backend...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">

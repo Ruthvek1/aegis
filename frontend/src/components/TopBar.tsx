@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, DollarSign, Clock, Play, Square, Key, ShieldCheck, Server, RefreshCw } from 'lucide-react';
+import { Activity, DollarSign, Clock, Play, Square, Key, ShieldCheck } from 'lucide-react';
 
 interface TopBarProps {
   costUsd: number;
@@ -16,32 +16,6 @@ export const TopBar: React.FC<TopBarProps> = ({ costUsd, isRunning, onStart, onS
   const [isHuman, setIsHuman] = useState(false);
   const [powerMode, setPowerMode] = useState('low');
   const [elapsed, setElapsed] = useState(0);
-  const [backendState, setBackendState] = useState<'waking' | 'online'>('waking');
-
-  useEffect(() => {
-    let mounted = true;
-    const checkHealth = async () => {
-      try {
-        const res = await fetch('/api/runs');
-        if (res.ok && mounted) {
-          setBackendState('online');
-          return true;
-        }
-      } catch (e) {
-        // network error when backend is completely down/waking
-      }
-      return false;
-    };
-
-    const poll = async () => {
-      if (await checkHealth()) return;
-      if (!mounted) return;
-      setTimeout(poll, 3000);
-    };
-    poll();
-    
-    return () => { mounted = false; };
-  }, []);
 
   useEffect(() => {
     let interval: any;
@@ -156,18 +130,6 @@ export const TopBar: React.FC<TopBarProps> = ({ costUsd, isRunning, onStart, onS
       </div>
 
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary/50 rounded-full border border-border text-sm">
-          <Server size={14} className={backendState === 'online' ? "text-green-400" : "text-muted-foreground"} />
-          <span className="text-muted-foreground">Backend:</span>
-          {backendState === 'waking' ? (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-yellow-500/10 text-yellow-500 rounded-full">
-              <RefreshCw size={12} className="animate-spin" />
-              <span className="font-medium text-xs">Waking up...</span>
-            </div>
-          ) : (
-            <span className="font-medium text-green-400">Online</span>
-          )}
-        </div>
         <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary/50 rounded-full border border-border text-sm">
           <Activity size={14} className={isRunning ? "text-green-400 animate-pulse" : "text-muted-foreground"} />
           <span className="text-muted-foreground">Status:</span>
